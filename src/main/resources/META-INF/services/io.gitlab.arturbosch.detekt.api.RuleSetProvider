@@ -1,0 +1,2 @@
+io.fluxid.detekt.anonymouslogic.AnonymousLogicRuleSetProvider
+io.fluxid.detekt.unusedconstants.UnusedConstantsRuleSetProvider
