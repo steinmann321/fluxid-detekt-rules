@@ -136,6 +136,32 @@ unused-constants:
   unused (e.g. placeholder values, documented examples). Use sparingly and
   document the rationale next to the declaration.
 
+## Security and pinning
+
+These rules are intended to be safe to adopt in strict codebases:
+
+- **Public source** — this repository contains all code that goes into the
+  published artifact.
+- **Pinned versions** — always depend on an explicit version, e.g.
+  `com.github.steinmann321:fluxid-detekt-rules:v0.1.1`.
+- **Gradle dependency verification** — projects using Gradle's
+  `verification-metadata.xml` can pin the exact checksums of the jar and POM,
+  so any tampering in transit will fail the build instead of being silently
+  accepted.
+- **Dependency locking** — if you use Gradle's lockfiles, include
+  `fluxid-detekt-rules` in the `detektPlugins` lock; this ensures your Detekt
+  plugin set cannot change without an explicit lockfile update.
+
+Minimal verification recipe for a consuming project:
+
+```bash
+./gradlew --write-verification-metadata sha256
+./gradlew :app:dependencies --configuration detektPlugins --write-locks
+```
+
+After that, upgrading to a new version of these rules is always an explicit
+change (version bump + lock/verification update) that can be code-reviewed.
+
 ## Typical Gradle wiring
 
 A focused Detekt task per ruleset keeps enforcement explicit and fast. Example
