@@ -11,9 +11,6 @@ import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.kotlin.psi.psiUtil.collectDescendantsOfType
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.Paths
 
 /**
  * Flags constants in *Constants.kt files that are never referenced anywhere
@@ -48,6 +45,11 @@ class UnusedConstantsRule(config: Config = Config.empty) : Rule(config) {
     override fun visitKtFile(file: KtFile) {
         super.visitKtFile(file)
 
+        // Register the raw text for this file so we can count constant name
+        // occurrences across the whole module without relying on filesystem
+        // layout or working directory assumptions.
+        ProjectSourceIndex.register(file)
+
         val fileName = file.name
         if (!filePattern.matches(fileName)) return
 
@@ -58,15 +60,16 @@ class UnusedConstantsRule(config: Config = Config.empty) : Rule(config) {
 
         if (properties.isEmpty()) return
 
-        val contentsByPath = ProjectSourceIndex.contents
+        val allContents = ProjectSourceIndex.contents
 
         properties.forEach { property ->
             val name = property.name ?: return@forEach
             if (name in allowlist) return@forEach
 
-            // Count word-boundary matches of the constant name across the module.
+            // Count word-boundary matches of the constant name across all
+            // files analysed in this Detekt run.
             val pattern = Regex("\\b" + Regex.escape(name) + "\\b")
-            val occurrences = contentsByPath.values.sumOf { content ->
+            val occurrences = allContents.sumOf { content ->
                 pattern.findAll(content).count()
             }
 
@@ -84,33 +87,13 @@ class UnusedConstantsRule(config: Config = Config.empty) : Rule(config) {
     }
 
     private object ProjectSourceIndex {
-        val contents: Map<Path, String> by lazy { loadContents() }
+        private val texts: MutableList<String> = mutableListOf()
 
-        private fun loadContents(): Map<Path, String> {
-            return try {
-                // Assume the working directory is the module root and scan src/**.kt.
-                val srcRoot = Paths.get("src")
-                if (!Files.exists(srcRoot)) return emptyMap()
+        val contents: List<String>
+            get() = texts
 
-                Files.walk(srcRoot).use { stream ->
-                    val result = mutableMapOf<Path, String>()
-                    stream
-                        .filter { path ->
-                            Files.isRegularFile(path) && path.toString().endsWith(".kt")
-                        }
-                        .forEach { path ->
-                            val content = try {
-                                String(Files.readAllBytes(path))
-                            } catch (_: Exception) {
-                                ""
-                            }
-                            result[path] = content
-                        }
-                    result
-                }
-            } catch (e: Exception) {
-                throw IllegalStateException("UnusedConstants index FAILED: ${'$'}{e.message}", e)
-            }
+        fun register(file: KtFile) {
+            texts += file.text
         }
     }
 
