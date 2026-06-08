@@ -100,7 +100,7 @@ class UnusedConstantsRule(config: Config = Config.empty) : Rule(config) {
                         }
                         .forEach { path ->
                             val content = try {
-                                Files.readString(path)
+                                String(Files.readAllBytes(path))
                             } catch (_: Exception) {
                                 ""
                             }
