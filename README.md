@@ -105,8 +105,10 @@ when `const val` declarations are never referenced anywhere in the module.
 
 This rule:
 
-- Finds `const val` properties in files whose name matches `filePattern`.
-- Builds a simple index of all Kotlin files under `src/**.kt`.
+- Finds `const val` properties in files whose name matches any of the
+  configured `filePatterns`.
+- Builds a simple index of all Kotlin files under the configured
+  `sourceRoots`.
 - Counts word-boundary matches of each constant name across that index.
 - Reports constants whose name is seen only once (the declaration itself).
 
@@ -126,12 +128,26 @@ unused-constants:
 
   UnusedConstantsRule:
     active: true
-    filePattern: ".*Constants\\.kt"
+
+    # Where to scan for usages (module-relative paths)
+    sourceRoots:
+      - "src/main/java"
+      - "src/main/kotlin"
+      - "src/test/java"
+      - "src/test/kotlin"
+
+    # Which files define constants to be checked (regexes on filenames)
+    filePatterns:
+      - ".*Constants\\.kt"
+
+    # Optionally ignore specific constant names
     allowlist: []
 ```
 
-- `filePattern` — regex applied to the *filename* (e.g. `.*Constants\.kt`);
-  only matching files are scanned for constants.
+- `sourceRoots` — list of module-relative directories that will be scanned
+  for `*.kt` files when building the usage index.
+- `filePatterns` — regexes applied to the *filename* (e.g. `.*Constants\.kt`);
+  only matching files are treated as containers of const values to check.
 - `allowlist` — list of constant names that are intentionally allowed to be
   unused (e.g. placeholder values, documented examples). Use sparingly and
   document the rationale next to the declaration.
