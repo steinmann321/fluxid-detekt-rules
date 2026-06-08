@@ -87,12 +87,13 @@ class UnusedConstantsRule(config: Config = Config.empty) : Rule(config) {
     }
 
     private object ProjectSourceIndex {
-        private val texts: MutableList<String> = mutableListOf()
+        private val texts: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf<String>())
 
         val contents: List<String>
-            get() = texts
+            get() = synchronized(texts) { texts.toList() }
 
         fun register(file: KtFile) {
+            // Detekt may visit files in parallel; ensure registration is thread-safe.
             texts += file.text
         }
     }
