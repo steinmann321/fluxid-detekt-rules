@@ -138,11 +138,27 @@ unused-constants:
 
 ## Security and pinning
 
-These rules are intended to be safe to adopt in strict codebases:
+These rules are intended to be safe to adopt in strict codebases.
+
+### Internal dependency versions (fully pinned)
+
+This plugin is built against explicit, fixed versions of its own dependencies
+— there are **no** dynamic versions (`+`, `latest.*`, version ranges, etc.):
+
+- `io.gitlab.arturbosch.detekt:detekt-api:1.23.6`
+- `org.jetbrains.kotlin:kotlin-stdlib:1.9.23`
+- `org.jetbrains.kotlin:kotlin-compiler-embeddable:1.9.23`
+
+These versions are declared directly in `build.gradle.kts` of this project and
+there is no "floating" resolution at build time.
+
+### Recommendations for consumers
+
+To treat this plugin as a supply-chain–safe dependency:
 
 - **Public source** — this repository contains all code that goes into the
   published artifact.
-- **Pinned versions** — always depend on an explicit version, e.g.
+- **Pinned artifact version** — always depend on an explicit version, e.g.
   `com.github.steinmann321:fluxid-detekt-rules:v0.1.1`.
 - **Gradle dependency verification** — projects using Gradle's
   `verification-metadata.xml` can pin the exact checksums of the jar and POM,
