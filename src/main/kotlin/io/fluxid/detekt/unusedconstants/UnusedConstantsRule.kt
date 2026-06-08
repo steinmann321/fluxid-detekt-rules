@@ -56,11 +56,6 @@ class UnusedConstantsRule(config: Config = Config.empty) : Rule(config) {
     private val allowlist: Set<String> =
         valueOrDefault(KEY_ALLOWLIST, emptyList<String>()).toSet()
 
-    // Lazily built, project-wide index of all Kotlin file contents under the
-    // configured sourceRoots. Built once per Detekt run, then read-only.
-    private val allContents: List<String> by lazy {
-        ProjectSourceIndex.build(sourceRoots)
-    }
 
     override fun visitKtFile(file: KtFile) {
         super.visitKtFile(file)
@@ -77,7 +72,7 @@ class UnusedConstantsRule(config: Config = Config.empty) : Rule(config) {
 
         if (properties.isEmpty()) return
 
-        val contents = allContents
+        val contents = ProjectSourceIndex.contentsFor(file, sourceRoots)
 
         properties.forEach { property ->
             val name = property.name ?: return@forEach
@@ -104,17 +99,68 @@ class UnusedConstantsRule(config: Config = Config.empty) : Rule(config) {
     }
 
     private object ProjectSourceIndex {
-        fun build(sourceRoots: List<String>): List<String> {
+        @Volatile
+        private var cachedContents: List<String>? = null
+
+        fun contentsFor(file: KtFile, sourceRoots: List<String>): List<String> {
+            val existing = cachedContents
+            if (existing != null) return existing
+
+            return synchronized(this) {
+                val again = cachedContents
+                if (again != null) {
+                    again
+                } else {
+                    val moduleRoot = inferModuleRoot(file)
+                    val built = buildFromModuleRoot(moduleRoot, sourceRoots)
+                    cachedContents = built
+                    built
+                }
+            }
+        }
+
+        private fun inferModuleRoot(file: KtFile): Path {
+            val pathStr: String = try {
+                val location = Entity.from(file).location
+                val raw = location.filePath.toString()
+                raw.substringAfter("absolutePath=", "").substringBefore(", basePath", "")
+            } catch (_: Exception) {
+                ""
+            }
+
+            if (pathStr.isBlank()) {
+                return Paths.get("").toAbsolutePath()
+            }
+
+            var path = Paths.get(pathStr)
+            // Walk up until we find a parent directory named "src"; its parent
+            // is treated as the module root (e.g. .../app/app/src → .../app/app).
+            while (path.parent != null) {
+                val parent = path.parent
+                if (parent.fileName?.toString() == "src") {
+                    return parent.parent ?: parent
+                }
+                path = parent
+            }
+
+            return Paths.get(pathStr).parent ?: Paths.get("").toAbsolutePath()
+        }
+
+        private fun buildFromModuleRoot(moduleRoot: Path, sourceRoots: List<String>): List<String> {
             val result = mutableListOf<String>()
 
             sourceRoots.forEach { root ->
-                val rootPath = Paths.get(root)
-                if (!Files.exists(rootPath)) return@forEach
+                val rootPath = moduleRoot.resolve(root)
+                if (!Files.exists(rootPath)) {
+                    return@forEach
+                }
 
                 Files.walk(rootPath).use { stream ->
                     stream
                         .filter { path ->
-                            Files.isRegularFile(path) && path.toString().endsWith(".kt")
+                            if (!Files.isRegularFile(path)) return@filter false
+                            val name = path.toString()
+                            name.endsWith(".kt") || name.endsWith(".kts") || name.endsWith(".java")
                         }
                         .forEach { path ->
                             result += readFileSafely(path)
